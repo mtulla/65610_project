@@ -1,6 +1,7 @@
 import brevitas.nn as qnn
 import torch.nn as nn
 import torch
+import numpy
 from concrete.ml.torch.compile import compile_brevitas_qat_model
 
 N_FEAT = 12
