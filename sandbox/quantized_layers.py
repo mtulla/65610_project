@@ -40,3 +40,4 @@ print(4)
 x_test = numpy.array([numpy.random.randn(N_FEAT)])
 
 y_pred = quantized_module.forward(x_test, fhe="execute")
+print(y_pred)
