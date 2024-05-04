@@ -7,5 +7,8 @@ $ source venv/bin/activate
 (venv) $ pip install -r requirements.txt --no-cache-dir
 ```
 
-Before running the jupyter notebook, run python -m ipykernel install --name=venv
+Before running the jupyter notebook, run 
 
+```
+python -m ipykernel install --name=venv
+```
