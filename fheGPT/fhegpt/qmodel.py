@@ -84,14 +84,15 @@ class QuantCasualSelfAttention(nn.Module):
         Returns:
             ndarray: The softmax outputs.
         """
-        # Compute the max value for each sequence
-        # q_x_max, _ = torch.max(q_x, axis=-1, keepdim=True)
-        q_x_max, _ = torch.max(q_x, axis=-1)
-        q_x_max = q_x_max.unsqueeze(-1)
+        # # # Compute the max value for each sequence
 
-        # Subtract max for numerical stability
-        q_x_minus_max = q_x - q_x_max
-
+        # print("orig shape", q_x.shape)
+        # q_x_ec = torch.max(q_x)
+# 
+        # # # Subtract max for numerical stability
+        # q_x_minus_max = q_x - q_x_ec
+        
+        q_x_minus_max = q_x
         # Apply the exponential
         x_exp = torch.exp(q_x_minus_max)
 
