@@ -1,0 +1,17 @@
+Traceback (most recent call last):
+  File "/mnt/c/Users/kingo/Desktop/MIT 2023-24/6.5610/65610_project/venv/lib/python3.10/site-packages/concrete/fhe/compilation/compiler.py", line 583, in compile
+    circuit = Circuit(
+  File "/mnt/c/Users/kingo/Desktop/MIT 2023-24/6.5610/65610_project/venv/lib/python3.10/site-packages/concrete/fhe/compilation/circuit.py", line 63, in __init__
+    self.enable_fhe_execution()
+  File "/mnt/c/Users/kingo/Desktop/MIT 2023-24/6.5610/65610_project/venv/lib/python3.10/site-packages/concrete/fhe/compilation/circuit.py", line 129, in enable_fhe_execution
+    self.server = Server.create(
+  File "/mnt/c/Users/kingo/Desktop/MIT 2023-24/6.5610/65610_project/venv/lib/python3.10/site-packages/concrete/fhe/compilation/server.py", line 206, in create
+    compilation_result = support.compile(mlir, options, compilation_context)
+  File "/mnt/c/Users/kingo/Desktop/MIT 2023-24/6.5610/65610_project/venv/lib/python3.10/site-packages/concrete/compiler/library_support.py", line 172, in compile
+    self.cpp().compile(
+RuntimeError: Can't emit artifacts: Command failed:ld --shared -o /tmp/tmpn4ayfsrt/sharedlib.so /tmp/tmpn4ayfsrt/program.module-0.mlir.o /mnt/c/Users/kingo/Desktop/MIT 2023-24/6.5610/65610_project/venv/lib/python3.10/site-packages/concrete_python.libs/libConcretelangRuntime-9b345fb1.so -rpath=/mnt/c/Users/kingo/Desktop/MIT 2023-24/6.5610/65610_project/venv/lib/python3.10/site-packages/concrete_python.libs --disable-new-dtags 2>&1
+Code:256
+ld: cannot find /mnt/c/Users/kingo/Desktop/MIT: No such file or directory
+ld: cannot find 2023-24/6.5610/65610_project/venv/lib/python3.10/site-packages/concrete_python.libs/libConcretelangRuntime-9b345fb1.so: No such file or directory
+ld: cannot find 2023-24/6.5610/65610_project/venv/lib/python3.10/site-packages/concrete_python.libs: No such file or directory
+

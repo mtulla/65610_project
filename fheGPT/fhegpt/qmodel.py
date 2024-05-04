@@ -29,10 +29,13 @@ class QuantCasualSelfAttention(nn.Module):
         assert config.n_embd % config.n_head == 0
         self.quant_inp = qnn.QuantIdentity(**qidentity_args)
         # key, query, value projections for all heads, but in a batch
-        self.c_attn = qnn.QuantLinear(config.n_embd, 3 * config.n_embd, **qlinear_args)
+        self.c_attn1 = qnn.QuantLinear(config.n_embd, config.n_embd, **qlinear_args)
+        self.c_attn2 = qnn.QuantLinear(config.n_embd, config.n_embd, **qlinear_args)
+        self.c_attn3 = qnn.QuantLinear(config.n_embd, config.n_embd, **qlinear_args)
         # output projection
         self.c_proj = qnn.QuantLinear(config.n_embd, config.n_embd, **qlinear_args)
         # regularization
+        # self.softmax_layer = torch.nn.Softmax(dim=-1)
         self.attn_dropout = qnn.QuantDropout(config.attn_pdrop)
         self.resid_dropout = qnn.QuantDropout(config.resid_pdrop)
         # causal mask to ensure that attention is only applied to the left in the input sequence
@@ -71,20 +74,58 @@ class QuantCasualSelfAttention(nn.Module):
 
         return q_x_softmax
 
+    @staticmethod  
+    def qsoftmax2(q_x: np.ndarray):
+        """Compute the softmax function for ndarray.
+
+        Args:
+            q_x (ndarray): The input values.
+
+        Returns:
+            ndarray: The softmax outputs.
+        """
+        # Compute the max value for each sequence
+        # q_x_max, _ = torch.max(q_x, axis=-1, keepdim=True)
+        q_x_max, _ = torch.max(q_x, axis=-1)
+        q_x_max = q_x_max.unsqueeze(-1)
+
+        # Subtract max for numerical stability
+        q_x_minus_max = q_x - q_x_max
+
+        # Apply the exponential
+        x_exp = torch.exp(q_x_minus_max)
+
+        # Compute the sum along the sequence axis
+        q_x_exp_sum = torch.sum(x_exp, axis=-1, keepdims=True)
+
+        # Compute the inverse of the sum
+        # x_inverse_exp_sum = 1.0 / q_x_exp_sum
+        x_inverse_exp_sum = torch.ones_like(q_x_exp_sum) / q_x_exp_sum
+
+        # Compute the final softmax values
+        q_x_softmax = x_exp * x_inverse_exp_sum
+
+        return q_x_softmax
+
+
     def forward(self, x):
         x = self.quant_inp(x)
         B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
-
+        print("x size", x.size())
         # calculate query, key, values for all heads in batch and move head forward to be the batch dim
-        q, k ,v  = self.c_attn(x).split(self.n_embd, dim=2)
+        q, k, v  = self.c_attn1(x), self.c_attn2(x), self.c_attn3(x)
         k = k.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
         q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
         v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
-
+        print("k size", k.size())
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
         att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
+        print("att size", att.size())
+        print("type:" + str(att.type))
+        print(att)
         att = att.masked_fill(self.bias[:,:,:T,:T] == 0, float('-inf'))
-        att = F.softmax(att)
+        # att = self.softmax_layer(att) 
+        att = QuantCasualSelfAttention.qsoftmax2(att)
         att = self.attn_dropout(att)
         y = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
         y = y.transpose(1, 2).contiguous().view(B, T, C) # re-assemble all head outputs side by side

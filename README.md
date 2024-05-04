@@ -7,8 +7,7 @@ $ source venv/bin/activate
 (venv) $ pip install -r requirements.txt --no-cache-dir
 ```
 
-Before running the jupyter notebook, run 
-
-```
 python -m ipykernel install --name=venv
-```
+
+(Note: for Windows, use 'wsl' to enter Linux before running 'source venv/bin/activate')
+(Set kernel to installed 'venv' kernel in Jupyter notebook when running .ipynb files to access installed modules in requirements.txt)
