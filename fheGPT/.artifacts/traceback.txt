@@ -1,0 +1,20 @@
+Traceback (most recent call last):
+  File "/mnt/c/Users/kingo/Desktop/MIT2023-24/6.5610/65610_project/venv/lib/python3.10/site-packages/concrete/fhe/compilation/compiler.py", line 456, in compile
+    self._evaluate("Compiling", inputset)
+  File "/mnt/c/Users/kingo/Desktop/MIT2023-24/6.5610/65610_project/venv/lib/python3.10/site-packages/concrete/fhe/compilation/compiler.py", line 301, in _evaluate
+    self._trace(first_sample)
+  File "/mnt/c/Users/kingo/Desktop/MIT2023-24/6.5610/65610_project/venv/lib/python3.10/site-packages/concrete/fhe/compilation/compiler.py", line 220, in _trace
+    self.graph = Tracer.trace(self.function, parameters)
+  File "/mnt/c/Users/kingo/Desktop/MIT2023-24/6.5610/65610_project/venv/lib/python3.10/site-packages/concrete/fhe/tracing/tracer.py", line 85, in trace
+    output_tracers: Any = function(**arguments)
+  File "/mnt/c/Users/kingo/Desktop/MIT2023-24/6.5610/65610_project/concrete-ml/src/concrete/ml/common/utils.py", line 1, in _clear_forward_proxy
+    """Utils that can be re-used by other pieces of code in the module."""
+  File "/mnt/c/Users/kingo/Desktop/MIT2023-24/6.5610/65610_project/concrete-ml/src/concrete/ml/quantization/quantized_module.py", line 476, in _clear_forward
+    _raise_qat_import_error(bad_qat_ops)
+  File "/mnt/c/Users/kingo/Desktop/MIT2023-24/6.5610/65610_project/concrete-ml/src/concrete/ml/quantization/quantized_module.py", line 45, in _raise_qat_import_error
+    raise ValueError(
+ValueError: Error occurred during quantization aware training (QAT) import: The following tensors were expected to be quantized, but the values found during calibration do not appear to be quantized. 
+
+* Tensor /MatMul_1_output_0, input of a Reshape operation
+
+Could not determine a unique scale for the quantization! Please check the ONNX graph of this model.
