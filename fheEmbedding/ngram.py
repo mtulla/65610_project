@@ -6,9 +6,14 @@ import torch.nn.functional as F
 import torch.optim as optim
 import torch.ao.quantization
 import torch.ao.nn
+import brevitas.nn as qnn
+from brevitas.quant import Int8ActPerTensorFloat
+from concrete.ml.torch.compile import compile_brevitas_qat_model
+import numpy as np
 
 torch.manual_seed(1)
 
+N_BITS = 10
 CONTEXT_SIZE = 2
 EMBEDDING_DIM = 10
 # We will use Shakespeare Sonnet 2
@@ -39,25 +44,35 @@ ngrams = [
 vocab = set(test_sentence)
 word_to_ix = {word: i for i, word in enumerate(vocab)}
 
+def word_to_tensor(word):
+    return torch.nn.functional.one_hot(torch.tensor(word_to_ix[word]), len(vocab)).float()
+
 
 class QuantNGramLanguageModeler(nn.Module):
 
     def __init__(self, vocab_size, embedding_dim, context_size):
         super(QuantNGramLanguageModeler, self).__init__()
-        self.quant = torch.ao.quantization.QuantStub()
-        self.embeddings = torch.ao.nn.quantized.Embedding(vocab_size, embedding_dim)
-        self.linear1 = nn.Linear(context_size * embedding_dim, 128)
-        self.linear2 = nn.Linear(128, vocab_size)
-        self.dequant = torch.ao.quantization.DeQuantStub()
+        self.embeddings = qnn.QuantEmbedding(vocab_size, embedding_dim)
+        self.linear1 = qnn.QuantLinear(context_size * embedding_dim, 128, bias=True, bias_quant=None)
+        self.linear2 = qnn.QuantLinear(128, vocab_size, bias=True, bias_quant=None)
 
     def forward(self, inputs):
-        qinputs = self.quant(inputs)
-        embeds = self.embeddings(qinputs.int()).view((1, -1))
-        out = F.relu(self.linear1(embeds.float()))
+        embeds = self.embeddings(inputs).view((1, -1))
+        out = torch.relu(self.linear1(embeds))
         out = self.linear2(out)
-        out = self.dequant(out)
-        log_probs = F.log_softmax(out, dim=1)
-        return log_probs
+        return out
+
+class QuantLinearEmbedding(nn.Module):
+    def __init__(self, vocab_size, embedding_dim):
+        super(QuantLinearEmbedding, self).__init__()
+        self.quant_inp = qnn.QuantIdentity(bit_width=N_BITS, return_quant_tensor=True)
+        self.embeddings = qnn.QuantLinear(vocab_size, embedding_dim, weight_bit_width=N_BITS, bias=False, bias_quant=None)
+
+    def forward(self, inputs):
+        quant_inp = self.quant_inp(inputs)
+        embeds = self.embeddings(quant_inp)
+        return embeds
+
 
 def training_loop(model):
     losses = []
@@ -70,7 +85,7 @@ def training_loop(model):
 
             # Step 1. Prepare the inputs to be passed to the model (i.e, turn the words
             # into integer indices and wrap them in tensors)
-            context_idxs = torch.tensor([word_to_ix[w] for w in context], dtype=torch.float)
+            context_idxs = torch.tensor([word_to_ix[w] for w in context], dtype=torch.long)
 
             # Step 2. Recall that torch *accumulates* gradients. Before passing in a
             # new instance, you need to zero out the gradients from the old
@@ -79,7 +94,8 @@ def training_loop(model):
 
             # Step 3. Run the forward pass, getting log probabilities over next
             # words
-            log_probs = model(context_idxs)
+            out = model(context_idxs)
+            log_probs = F.log_softmax(out, dim=1)
 
             # Step 4. Compute your loss function. (Again, Torch wants the target
             # word wrapped in a tensor)
@@ -92,14 +108,31 @@ def training_loop(model):
             # Get the Python number from a 1-element Tensor by calling tensor.item()
             total_loss += loss.item()
         losses.append(total_loss)
-    print(losses)  # The loss decreased every iteration over the training data! 
+    print(f"Loss: {losses}")  # The loss decreased every iteration over the training data! 
 
 model = QuantNGramLanguageModeler(len(vocab), EMBEDDING_DIM, CONTEXT_SIZE)
+
+model.train()
+training_loop(model)
 model.eval()
-model.qconfig = torch.ao.quantization.get_default_qat_qconfig('x86')
-model_prepared = torch.ao.quantization.prepare_qat(model.train())
 
-training_loop(model_prepared)
+print(f"Model: {model}")
+inp = torch.tensor(word_to_ix["beauty"], dtype=torch.long)
+print(f"Embedding of beauty: {model.embeddings(inp)}")
 
-model_prepared.eval()
-quant_model = torch.ao.quantization.convert(model_prepared)
+qembedding = qnn.QuantLinear(len(vocab), EMBEDDING_DIM, bias=False, bias_quant=None)
+qembedding.weight = nn.Parameter(model.embeddings.weight.transpose(0, 1))
+print(f"Quantized Embedding of beauty: {qembedding(word_to_tensor('beauty'))}")
+
+# Compile the embedding.
+input_data = torch.stack([word_to_tensor(word) for word in vocab])
+input_data = np.array(input_data, dtype=float)
+compiled_embedding = compile_brevitas_qat_model(
+    qembedding,
+    input_data,
+)
+
+# Run encrypted embedding
+inp = np.array(word_to_tensor("beauty"), dtype=float)
+out = compiled_embedding.forward(inp, fhe="execute")
+print(f"Embedding of beauty done in FHE {out}")
