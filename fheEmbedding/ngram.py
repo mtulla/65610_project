@@ -47,6 +47,9 @@ word_to_ix = {word: i for i, word in enumerate(vocab)}
 def word_to_tensor(word):
     return torch.nn.functional.one_hot(torch.tensor(word_to_ix[word]), len(vocab)).float()
 
+def word_to_2d_tensor(word):
+    return torch.nn.functional.one_hot(torch.tensor([word_to_ix[word]]), len(vocab)).float()
+
 
 class QuantNGramLanguageModeler(nn.Module):
 
@@ -65,8 +68,8 @@ class QuantNGramLanguageModeler(nn.Module):
 class QuantLinearEmbedding(nn.Module):
     def __init__(self, vocab_size, embedding_dim):
         super(QuantLinearEmbedding, self).__init__()
-        self.quant_inp = qnn.QuantIdentity(bit_width=N_BITS, return_quant_tensor=True)
-        self.embeddings = qnn.QuantLinear(vocab_size, embedding_dim, weight_bit_width=N_BITS, bias=False, bias_quant=None)
+        self.quant_inp = qnn.QuantIdentity(return_quant_tensor=True)
+        self.embeddings = qnn.QuantLinear(vocab_size, embedding_dim, bias=False, bias_quant=None)
 
     def forward(self, inputs):
         quant_inp = self.quant_inp(inputs)
@@ -120,9 +123,10 @@ print(f"Model: {model}")
 inp = torch.tensor(word_to_ix["beauty"], dtype=torch.long)
 print(f"Embedding of beauty: {model.embeddings(inp)}")
 
-qembedding = qnn.QuantLinear(len(vocab), EMBEDDING_DIM, bias=False, bias_quant=None)
+qembedding = qnn.QuantLinear(len(vocab), EMBEDDING_DIM, bias=False, bias_quant=None, input_quant=Int8ActPerTensorFloat)
 qembedding.weight = nn.Parameter(model.embeddings.weight.transpose(0, 1))
-print(f"Quantized Embedding of beauty: {qembedding(word_to_tensor('beauty'))}")
+inp = word_to_2d_tensor('beauty')
+print(f"Quantized Embedding of beauty: {qembedding(inp)}")
 
 # Compile the embedding.
 input_data = torch.stack([word_to_tensor(word) for word in vocab])
@@ -133,6 +137,6 @@ compiled_embedding = compile_brevitas_qat_model(
 )
 
 # Run encrypted embedding
-inp = np.array(word_to_tensor("beauty"), dtype=float)
+inp = np.array(word_to_2d_tensor("beauty"), dtype=float)
 out = compiled_embedding.forward(inp, fhe="execute")
 print(f"Embedding of beauty done in FHE {out}")
