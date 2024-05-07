@@ -5,11 +5,13 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 import pickle
-from ngram import QuantNGramLanguageModeler, pickle_to_path
+import logging
+from ngram import QuantNGramLanguageModeler, tokenize, pickle_to_path
+logger = logging.getLogger(__name__)
 
-N_BITS = 10
 CONTEXT_SIZE = 2
-EMBEDDING_DIM = 10
+EMBEDDING_DIM = 100
+TEXT_PATH = "text/great_gatsby.txt"
  
 
 def training_loop(model, ngrams, word_to_ix):
@@ -17,7 +19,7 @@ def training_loop(model, ngrams, word_to_ix):
     loss_function = nn.NLLLoss()
     optimizer = optim.SGD(model.parameters(), lr=0.001)
 
-    print(f"First 2 n-grams: {ngrams[:2]}")
+    logger.info(f"First 2 n-grams: {ngrams[:2]}")
 
     for epoch in range(10):
         total_loss = 0
@@ -50,19 +52,29 @@ def training_loop(model, ngrams, word_to_ix):
         
         losses.append(total_loss)
 
-        print(f"Epoch: {epoch}, Loss: {total_loss}")
+        logger.info(f"Epoch: {epoch}, Loss: {total_loss}")
 
-    print(f"Losses: {losses}")  # The loss decreased every iteration over the training data! 
+    logger.info(f"Losses: {losses}")  # The loss decreased every iteration over the training data! 
     return losses
 
 
 if __name__ == "__main__":
-    with open("text.txt", "r") as f:
-        text = f.read().split()
+    logging.basicConfig(
+        format="%(asctime)s %(name)-12s %(levelname)-8s %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+        filename="logs/training.log",
+        level=logging.INFO
+    )
+    logger.info(f"Running training with the parameters: CONTEXT_SIZE={CONTEXT_SIZE}, EMBEDDING_DIM={EMBEDDING_DIM}, TEXT_PATH={TEXT_PATH}")
+
+    logger.info("Tokenizing text...")
+    with open(TEXT_PATH, "r") as f:
+        text = tokenize(f.read())
 
     # we should tokenize the input, but we will ignore that for now
     # build a list of tuples.
     # Each tuple is ([ word_i-CONTEXT_SIZE, ..., word_i-1 ], target word)
+    logger.info("Building n-grams...")
     ngrams = [
         (
             [text[i - j - 1] for j in range(CONTEXT_SIZE)],
@@ -74,11 +86,13 @@ if __name__ == "__main__":
     word_to_ix = {word: i for i, word in enumerate(vocab)}
     vocab_size = len(vocab)
 
+    logger.info("Training the model...")
     model = QuantNGramLanguageModeler(vocab_size, EMBEDDING_DIM, CONTEXT_SIZE)
     model.train()
     losses = training_loop(model, ngrams, word_to_ix)
 
     # Save the model and other parameters.
+    logger.info("Saving the model and other parameters...")
     params = (vocab_size, EMBEDDING_DIM, CONTEXT_SIZE)
     pickle_to_path(params, "model/params.pkl")
     pickle_to_path(word_to_ix, "model/word_to_ix.pkl")
