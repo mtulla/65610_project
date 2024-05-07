@@ -12,6 +12,7 @@ from concrete.ml.torch.compile import compile_brevitas_qat_model
 import numpy as np
 from pathlib import Path
 import pickle
+import string
 
 
 def pickle_to_path(obj, path):
@@ -29,6 +30,11 @@ def word_to_tensor(word, word_to_ix, vocab_size):
 
 def word_to_2d_tensor(word, word_to_ix, vocab_size):
     return torch.nn.functional.one_hot(torch.tensor([word_to_ix[word]]), vocab_size).float()
+
+def tokenize(text):
+    for punct in string.punctuation:
+        text = text.replace(punct, " " + punct + " ")
+    return text.split()
 
 
 class QuantNGramLanguageModeler(nn.Module):
