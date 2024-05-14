@@ -8,6 +8,8 @@ from concrete.ml.common.serialization.loaders import load
 import numpy as np
 from pathlib import Path
 import logging
+import time
+import random
 logger = logging.getLogger(__name__)
 
 from ngram import (
@@ -17,6 +19,7 @@ from ngram import (
     pickle_from_path,
 )
 
+N_WORDS = 1000 # Number of words to profile
 
 if __name__ == "__main__":
     logging.basicConfig(
@@ -42,19 +45,51 @@ if __name__ == "__main__":
     logger.info("Compiling the embedding...")
     input_data = torch.stack([word_to_tensor(word, word_to_ix, vocab_size) for word in vocab])
     input_data = np.array(input_data, dtype=float)
+    compilation_time0 = time.perf_counter()
     compiled_embedding.compile(input_data)
+    compilation_time1 = time.perf_counter()
+    compilation_time = compilation_time1 - compilation_time0
 
-    # Show embedding from model.
-    inp = torch.tensor(word_to_ix["beauty"], dtype=torch.long)
-    logger.info(f"Embedding of beauty: {model.embeddings(inp)}")
+    
+    words = list(word_to_ix.keys())
+    random.shuffle(words)
+    words_to_embed = words[:N_WORDS]
 
-    # Show embedding after linearizing.
-    qembedding = qnn.QuantLinear(vocab_size, embedding_dim, bias=False, bias_quant=None, input_quant=Int8ActPerTensorFloat)
-    qembedding.weight = nn.Parameter(model.embeddings.weight.transpose(0, 1))
-    inp = word_to_2d_tensor("beauty", word_to_ix, vocab_size)
-    logger.info(f"Linearized embedding of beauty: {qembedding(inp)}")
+    # Get embedding from model.
+    total_embedding_time = 0
+    embeddings = {}
+    for word in words_to_embed:
+        inp = torch.tensor(word_to_ix[word], dtype=torch.long)
+        embedding_time0 = time.perf_counter()
+        emb = model.embeddings(inp)
+        embedding_time1 = time.perf_counter()
+        logger.info(f"Embedding of {word}: {emb}")
+        embeddings[word] = emb.detach().numpy()
+
+        total_embedding_time += embedding_time1 - embedding_time0
 
     # Run encrypted embedding.
-    inp = np.array(word_to_2d_tensor("beauty", word_to_ix, vocab_size), dtype=float)
-    out = compiled_embedding.forward(inp)
-    logger.info(f"Embedding of beauty done in FHE {out}")
+    total_fhe_time = 0
+    fhe_embeddings = {}
+    for word in words_to_embed:
+        inp = np.array(word_to_2d_tensor(word, word_to_ix, vocab_size), dtype=float)
+        embedding_time0 = time.perf_counter()
+        emb = compiled_embedding.forward(inp)
+        embedding_time1 = time.perf_counter()
+        logger.info(f"Embedding of {word} done in FHE {emb}")
+        fhe_embeddings[word] = emb
+
+        total_fhe_time += embedding_time1 - embedding_time0
+
+    avg_error = 0
+    for word in words_to_embed:
+        emb = embeddings[word]
+        fhe_emb = fhe_embeddings[word]
+        error = np.linalg.norm(emb - fhe_emb) / np.linalg.norm(emb)
+        avg_error += error
+    avg_error /= N_WORDS
+
+    logger.info(f"Compilation time: {compilation_time}")
+    logger.info(f"Total embedding time: {total_embedding_time}")
+    logger.info(f"Total FHE embedding time: {total_fhe_time}")
+    logger.info(f"Average error: {avg_error}")
